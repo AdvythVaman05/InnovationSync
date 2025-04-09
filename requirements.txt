@@ -1,0 +1,7 @@
+python-dotenv
+langchain-core>=0.1.0
+langchain-community>=0.2.0
+langchain-groq
+langchain-huggingface
+faiss-cpu
+sentence-transformers
