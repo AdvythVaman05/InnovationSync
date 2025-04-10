@@ -4,113 +4,87 @@ import json
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from pprint import pprint
-
+from NL2Mongo import schema_to_mongo_nl
 
 def load_mongo_connection():
     load_dotenv()
     mongo_uri = os.getenv("MONGO_URI")
-    db_name = os.getenv("DB_NAME", "test")
-    collection_name = os.getenv("COLLECTION_NAME", "titanic")
-
+    db_name = os.getenv("DB_NAME")
     client = MongoClient(mongo_uri)
-    db = client[db_name]
-    collection = db[collection_name]
-    return collection
+    return client[db_name]
 
-
-def get_collection_fields(collection):
-    # Get one sample document and extract its keys (field names)
-    sample = collection.find_one()
-    if not sample:
-        return []
-    return list(sample.keys())
-
+def extract_pipeline(mongo_query_str):
+    # Extract the aggregation pipeline array from the full MongoDB command
+    match = re.search(r'\.aggregate\(\s*(\[.*\])', mongo_query_str, re.DOTALL)
+    if match:
+        return match.group(1)
+    return mongo_query_str  # Return original if no match
 
 def clean_mongo_syntax(js_like_query: str) -> str:
-    """
-    Convert JavaScript-style MongoDB query to valid JSON.
-    Quotes all keys (including $operators) and ensures JSON compatibility.
-    """
-    # Remove newlines and extra whitespace
     js_like_query = re.sub(r'\n', '', js_like_query).strip()
-
-    # Quote all unquoted keys (including $operators)
     js_like_query = re.sub(r'([{,]\s*)(\$?\w+)\s*:', r'\1"\2":', js_like_query)
-
     return js_like_query
-
-
-def fix_field_case(pipeline_str, actual_fields):
-    """
-    Replace lowercase field names in the query with actual field names from MongoDB.
-    """
-    for field in actual_fields:
-        # Replace fields like "$age" or "_id: $parch"
-        pattern = re.compile(rf'(\$|["\s]){field.lower()}(["\s]|[^\w])', re.IGNORECASE)
-
-        def replacement(match):
-            return match.group(1) + field + match.group(2)
-
-        pipeline_str = pattern.sub(replacement, pipeline_str)
-    return pipeline_str
-
-
-
-def extract_pipeline(mongo_query_str: str):
-    if mongo_query_str.startswith("db.") and ".aggregate(" in mongo_query_str:
-        pipeline_start = mongo_query_str.find(".aggregate(") + len(".aggregate(")
-        pipeline_end = mongo_query_str.rfind(")")
-        return mongo_query_str[pipeline_start:pipeline_end]
-    return None
-
 
 def run_mongo_query(mongo_query_str, collection):
     try:
+        # Extract the pipeline array from the full query string
         pipeline_str = extract_pipeline(mongo_query_str)
-        if not pipeline_str:
-            print("❌ Couldn't extract pipeline.")
-            return
-
-        # Get actual field names from collection
-        actual_fields = get_collection_fields(collection)
-
-        # Fix field name casing
-        pipeline_str = fix_field_case(pipeline_str, actual_fields)
-
-        # Clean and prepare JSON-like string
         cleaned_str = clean_mongo_syntax(pipeline_str)
-
-        # Convert to valid Python object
         pipeline = json.loads(cleaned_str)
 
-        print("✅ Parsed aggregation pipeline:")
+        print("\n✅ Parsed Aggregation Pipeline:")
         pprint(pipeline)
 
-        # Run aggregation
-        results = collection.aggregate(pipeline)
-        print("\n📊 Results:")
-        result_found = False
-        for doc in results:
-            pprint(doc)
-            result_found = True
-
-        if not result_found:
-            print("⚠️ No matching documents found.")
+        results = list(collection.aggregate(pipeline))
+        
+        if results:
+            print("\n📊 Query Results:")
+            pprint(results)
+        else:
+            print("\n⚠️ No matching documents found.")
+            
+            print("\n🔍 Diagnostic Information:")
+            print("Diabetes field values:")
+            diabetes_values = list(collection.aggregate([
+                {"$group": {"_id": "$diabetes", "count": {"$sum": 1}}}
+            ]))
+            pprint(diabetes_values)
 
     except Exception as e:
-        print("❌ Error executing Mongo query:")
-        print(e)
-
+        print("\n❌ Error executing Mongo query:")
+        print(f"Error type: {type(e).__name__}")
+        print(f"Error details: {str(e)}")
+        print("\nQuery that failed:")
+        print(mongo_query_str)
+        print("\nExtracted pipeline:")
+        print(pipeline_str if 'pipeline_str' in locals() else "Pipeline extraction failed")
 
 if __name__ == "__main__":
-    # Sample MongoDB query string generated from LLM
-    mongo_query_str = '''db.titanic.aggregate([
-        { $group: { _id: "$parch", avgAge: { $avg: "$age" } } },
-        { $match: { avgAge: { $lt: 21 } } }
-    ])'''
+    mongo_schema = {
+        "patient_records": {
+            "patient_id": "string",
+            "name": "string",
+            "age": "int",
+            "gender": "string",
+            "diabetes": "yes/no",
+            "blood_pressure": "yes/no",
+            "arthritis": "yes/no",
+            "asthma": "yes/no",
+            "thyroid": "yes/no"
+        }
+    }
 
-    print("🧠 Generated Mongo Query String:")
+    db = load_mongo_connection()
+    collection = db["patient_records"]
+    
+    print("\n🔍 Collection Status:")
+    print(f"Collection: {collection.name}")
+    print(f"Document count: {collection.count_documents({})}")
+    
+    nl_query = input("\n🧠 Enter a natural language question: ")
+    mongo_query_str = schema_to_mongo_nl(nl_query, mongo_schema)
+
+    print("\n🧠 Generated Mongo Query:")
     print(mongo_query_str)
 
-    collection = load_mongo_connection()
     run_mongo_query(mongo_query_str, collection)

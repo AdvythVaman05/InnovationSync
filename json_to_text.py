@@ -37,6 +37,7 @@ def json_to_text(json_in: dict ):
     docs=[Document(page_content=text) for text in text] 
     embedding_model= HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vect_store=FAISS.from_documents(docs,embedding_model)
+    print(vect_store)
     
     retriever=vect_store.as_retriever(Ssarch_kwargs={"k":3}) 
     
