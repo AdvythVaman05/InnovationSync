@@ -24,8 +24,19 @@ def load_qa_chain():
 
 qa_chain = load_qa_chain()
 
+# --- App Header ---
+def app_header():
+    st.markdown("""
+        <div style='text-align: center; margin-top: -50px;'>
+            <h1 style='font-size: 60px; color: #4A90E2;'>🩺 MediQuest</h1>
+            <h3 style='color: #777;'>Quest for Care, Simplified</h3>
+            <hr style='border-top: 1px solid #ccc;' />
+        </div>
+    """, unsafe_allow_html=True)
+
 # --- Login ---
 def login():
+    app_header()
     st.title("🔐 EHR Login")
 
     role = st.selectbox("Select your role", ["Doctor", "Admin"])
@@ -141,6 +152,8 @@ def chat_assistant():
 
 # --- Main Router ---
 def main():
+    app_header()
+
     if "logged_in" not in st.session_state or not st.session_state.get("logged_in"):
         login()
         return
