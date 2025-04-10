@@ -4,8 +4,4 @@ langchain-community>=0.2.0
 langchain-groq
 langchain-huggingface
 faiss-cpu
-<<<<<<< HEAD
 sentence-transformers
-=======
-sentence-transformers
->>>>>>> 903c371bbbcb846032668d48369447a4c33ff0b6
