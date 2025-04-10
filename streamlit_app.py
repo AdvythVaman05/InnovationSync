@@ -36,7 +36,6 @@ def app_header():
 
 # --- Login ---
 def login():
-    app_header()
     st.title("🔐 EHR Login")
 
     role = st.selectbox("Select your role", ["Doctor", "Admin"])
